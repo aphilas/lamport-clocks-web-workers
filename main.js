@@ -18,9 +18,11 @@ const createWorker = fn => {
  */
 const runWorker = _ => {
   const NO_OF_WORKERS = 3
+  const EVENT_TYPES = { local: 0, send: 1, receive: 2, }
   
   const state = {
     sendPipes: [],
+    n: 0,
   }
 
   const nchoosek = (n,k) => { // SO
@@ -36,6 +38,12 @@ const runWorker = _ => {
    * @param {number} max Max number (inclusive)
    */
   const rand = max => Math.floor(Math.random() * (max + 1))
+
+  /**
+   * True with probability 1/k
+   * @param {number} k 
+   */
+  const toss = k => Math.random() < (1 / k)
 
   const noOfCombinations = nchoosek(NO_OF_WORKERS, 2)
 
@@ -56,16 +64,35 @@ const runWorker = _ => {
     }
   }
 
-  
   const run = _ => {
-    // console.log(state.sendPipes)
+    for (let i = 0; i < 10; i++) {
+      setTimeout(_ => {
+        const isSend = toss(5)
+        state.n += 1
+    
+        const { n, id } = state
+
+        if (!isSend) {
+          console.log(`Local event ${id}.${n}`)
+
+          self.postMessage({ id, n: state.n, type: EVENT_TYPES.local, })
+        } else {
+          const receiverPort = toss(2) ? state.sendPipes[0].id : state.sendPipes[1].id
+          send({ n, id }, receiverPort)
+          console.log(`Sending event ${id}.${n} to ${receiverPort}`)
+
+          self.postMessage({ id, n: state.n, type: EVENT_TYPES.send, })
+        }
+
+      }, Math.random() * 2)
+    }
 
     /**
      * Send message to all workers
      */
-    for (const pipe of state.sendPipes) {
-      send(`Hello worker ${pipe.id}, I am worker ${state.id}`, pipe.id)
-    }
+    // for (const pipe of state.sendPipes) {
+    //   send(`Hello worker ${pipe.id}, I am worker ${state.id}`, pipe.id)
+    // }
 
   }
 
@@ -85,7 +112,13 @@ const runWorker = _ => {
 
       // handle messages from other workers
       receivePort.addEventListener('message', event => {
-        console.log(`Received: ${event.data}`)
+        const { data: { id, n }} = event
+
+        state.n += 1
+        state.n = Math.max(state.n, n + 1)
+
+        console.log(`Received ${id}.${n} in ${state.id}`)
+        self.postMessage({ id: state.id, n: state.n, type: EVENT_TYPES.receive, source: id })
       })
     }
 
@@ -111,6 +144,7 @@ const runWorker = _ => {
 }
 
 const workers = []
+const events = []
 
 /**
  * Generate combinations of elements (not permutations)
@@ -127,6 +161,13 @@ for (let i = 0; i < NO_OF_WORKERS; i++) {
   const worker = createWorker(runWorker)
   workers.push(worker)
   worker.postMessage({ id: i })
+
+  // listen for messages from workers
+  worker.addEventListener('message', event => {
+    events.push(event.data)
+
+    if (events.length > 30) console.log(events) // FIX
+  })
 }
 
 /**
