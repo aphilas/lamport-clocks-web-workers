@@ -25,7 +25,6 @@ typedef struct
 } ListenArgs;
 
 void BroadcastAndListen(int qid, Link *mesh, int nodes, int links);
-pthread_t *Listen(int qid, Link *mesh, int nodes, int links);
 void *ListenPeer_P(void *args);
 void ListenPeer(Link *mesh, int qid, int peer, int links);
 void *SendData_P(void *args);

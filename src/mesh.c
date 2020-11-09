@@ -29,9 +29,11 @@ int CreateMesh(Link *mesh, int nodes)
 
 void CloseRemoteLinks(Link *mesh, int actor, int links)
 {
+    Link link;
+
     for (int i = 0; i < links; i++)
     {
-        Link link = mesh[i];
+        link = mesh[i];
 
         if (link.actor != actor)
         {
@@ -42,25 +44,26 @@ void CloseRemoteLinks(Link *mesh, int actor, int links)
 
 int getPort(Link *mesh, int actor, int patner, Mode mode, int links)
 {
+    Link link;
+
     for (int i = 0; i < links; i++)
     {
-        Link link = mesh[i];
+        link = mesh[i];
 
-        if (link.actor == actor && link.patner == patner)
+        if (link.actor == actor && link.patner == patner && link.mode == mode)
         {
-            if (link.mode == mode)
-            {
-                return link.fd;
-            }
+            return link.fd;
         }
     }
 }
 
 void CloseLinksMode(Link *mesh, Mode mode, int actor, int links)
 {
+    Link link;
+
     for (int i = 0; i < links; i++)
     {
-        Link link = mesh[i];
+        link = mesh[i];
 
         if (link.patner == 0 && actor != 0)
             continue;
@@ -74,9 +77,11 @@ void CloseLinksMode(Link *mesh, Mode mode, int actor, int links)
 
 void CloseParentLinks(Link *mesh, int actor, int links)
 {
+    Link link;
+
     for (int i = 0; i < links; i++)
     {
-        Link link = mesh[i];
+        link = mesh[i];
 
         if (link.actor == actor && link.patner == 0)
         {
