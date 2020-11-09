@@ -1,59 +1,51 @@
-#include <sys/types.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <sys/wait.h>
-
 #include "parent_child.h"
+#include <time.h>
 
-#define SEED 549873
-#define N0DES 3
+#define N0DES 5
 
 int main(void)
 {
-  Link mesh[square(N0DES) - N0DES];
 
-  CreateMesh(mesh, N0DES);
+  Link mesh[2 * (square(N0DES) - N0DES)];
 
-  bool parent = false;
+  int links = CreateMesh(mesh, N0DES);
+
+  printf("Mesh initialized..\n");
+  printf("\n");
+  
+  int pid;
 
   for (int qid = 1; qid < N0DES; qid++)
   {
-    int pid = fork();
+    pid = fork();
 
     if (pid < 0)
     {
-      //fork failed
       return 1;
     }
 
     if (pid == 0)
     {
-      ChildProcess(qid, mesh, N0DES);
+      srand(getpid() * time(NULL));
+      ChildProcess(qid, mesh, N0DES, links);
       break;
     }
-    else
-    {
-      parent = true;
-      // push pid onto an array
-    }
   }
 
-  if (parent)
+  if (pid > 0)
   {
     pid_t wpid;
-    int status = 0;
-    ParentProcess(0, mesh, N0DES);
-    wait(NULL);
-    wait(NULL);
-    // while ((wpid = wait(&status)) > 0) {
-      // printf("Child with PID #%d completed", wpid);
-    // }
-    //wait for children before exiting
-  }
 
-  // free(mesh);
+    ParentProcess(0, mesh, N0DES, links);
+
+    while ((wpid = wait(NULL)) > 0);
+
+    printf("\n");
+    printf("\n");
+
+    printf("All children comleted\n");
+
+  }
 
   exit(0);
 }

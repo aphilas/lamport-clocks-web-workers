@@ -1,91 +1,166 @@
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "parent_child.h"
 
-#define TRANSFERS 2
-#define MAX_SLEEP 20
+#define TRANSFERS 4
+#define MAX_SLEEP 20000
 #define P_SEND 5
+#define PARENT_ID 0
 
-void Listen(int qid, Link* mesh, int nodes);
-void Broadcast(int qid, Link *mesh, int nodes);
+typedef struct
+{
+    Link *mesh;
+    int qid;
+    int nodes;
+    int links;
+} TransferArgs;
 
+typedef struct
+{
+    Link *mesh;
+    int qid;
+    int peer;
+    int links;
+} ListenArgs;
 
-int counter;
+void BroadcastAndListen(int qid, Link *mesh, int nodes, int links);
+void *ListenPeer_P(void *args);
+void ListenPeer(Link *mesh, int qid, int peer, int links);
+void *SendData_P(void *args);
+void SendData(Link *mesh, int qid, int nodes, int links);
 
-void ChildProcess(int qid, Link *mesh, int nodes)
+void ChildProcess(int qid, Link *mesh, int nodes, int links)
 {
     CloseRemoteLinks(mesh, qid, nodes);
 
-    counter = 0;
+    BroadcastAndListen(qid, mesh, nodes, links);
 
-    Broadcast(qid, mesh, nodes);
-
-    CloseLinksMode(mesh, WRITE_LINK, qid, nodes);
-
-    Listen(qid, mesh, nodes);
-
-    CloseLinksMode(mesh, READ_LINK, qid, nodes);
-
-    CloseParentLinks(mesh, qid, nodes);
+    CloseParentLinks(mesh, qid, links);
 }
 
-void Broadcast(int qid, Link *mesh, int nodes)
+void BroadcastAndListen(int qid, Link *mesh, int nodes, int links)
 {
-    for (int i = 0; i < TRANSFERS; i++)
+    pthread_t b_threads[TRANSFERS];
+    TransferArgs *t_args;
+
+    pthread_t l_threads[nodes - 1];
+    ListenArgs *l_args;
+
+    for (int transfer = 0; transfer < TRANSFERS; transfer++)
     {
-        usleep(rand() % MAX_SLEEP);
+        t_args = malloc(sizeof(TransferArgs));
+        t_args->qid = qid;
+        t_args->links = links;
+        t_args->nodes = nodes;
+        t_args->mesh = mesh;
 
-        int t = get_target(nodes, qid);
+        pthread_create(&b_threads[transfer], NULL, SendData_P, (void *)t_args);
+    }
 
-        counter++;
+    for (int peer = 1; peer < nodes; peer++)
+    {
+        l_args = malloc(sizeof(ListenArgs));
+        l_args->qid = qid;
+        l_args->peer = peer;
+        l_args->links = links;
+        l_args->mesh = mesh;
 
-        Channel parent = {.mode = WRITE_LINK, .target = 0};
+        pthread_create(&l_threads[peer - 1], NULL, ListenPeer_P, (void *)l_args);
+    }
 
-        Channel target = {.mode = WRITE_LINK, .target = t};
+    for (int transfer = 0; transfer < TRANSFERS; transfer++)
+    {
+        pthread_join(b_threads[transfer], NULL);
+    }
 
-        int fd_parent = getPort(mesh, qid, parent, nodes);
+    CloseLinksMode(mesh, WRITE_LINK, qid, links);
 
-        int fd_target = getPort(mesh, qid, target, nodes);
+    for (int peer = 1; peer < nodes; peer++)
+    {
+        pthread_join(l_threads[peer - 1], NULL);
+    }
 
-        if (toss(P_SEND))
-        {
-            Data data = {.id = qid, .n = counter};
-            Log log = {.id = qid, .n = counter, .type = SEND, .source=t};
+    CloseLinksMode(mesh, READ_LINK, qid, links);
+}
 
-            write(fd_target, &data, sizeof(data));
-            write(fd_parent, &log, sizeof(log));
-        }
-        else
-        {
-            Log log = {.id = qid, .n = counter, .type = LOCAL, .source=-1};
-            write(fd_parent, &log, sizeof(log));
-        }
+void *SendData_P(void *args)
+{
+    TransferArgs *t_args = (TransferArgs *)args;
+
+    Link *mesh = t_args->mesh;
+    int qid = t_args->qid;
+    int nodes = t_args->nodes;
+    int links = t_args->links;
+
+    SendData(mesh, qid, nodes, links);
+
+    printf("Broadcaster on %d exiting", qid);
+
+    free(args);
+
+    pthread_exit(NULL);
+}
+
+void *ListenPeer_P(void *args)
+{
+    ListenArgs *l_args = (ListenArgs *)args;
+
+    Link *mesh = l_args->mesh;
+    int qid = l_args->qid;
+    int links = l_args->links;
+    int peer = l_args->peer;
+
+    if (qid != peer)
+    {
+        ListenPeer(mesh, qid, peer, links);
+    }
+
+    printf("Listener between %d and %d exiting", qid, peer);
+
+    free(args);
+
+
+    pthread_exit(NULL);
+}
+
+void SendData(Link *mesh, int qid, int nodes, int links)
+{
+    usleep(rand() % MAX_SLEEP);
+
+    int counter = rand() % 20;
+
+    int fd_parent = getPort(mesh, qid, PARENT_ID, WRITE_LINK, links);
+
+    if (toss(P_SEND))
+    {
+        int target = get_target(nodes, qid);
+        int fd_target = getPort(mesh, qid, target, WRITE_LINK, links);
+
+        Data data = {.id = qid, .n = counter};
+        write(fd_target, &data, sizeof(data));
+
+        Log log = {.actor = qid, .state = counter, .type = SEND, .patner = target};
+        write(fd_parent, &log, sizeof(log));
+    }
+    else
+    {
+        Log log = {.actor = qid, .state = counter, .type = LOCAL, .patner = PARENT_ID};
+        write(fd_parent, &log, sizeof(log));
     }
 }
 
-void Listen(int qid, Link* mesh, int nodes)
+void ListenPeer(Link *mesh, int qid, int peer, int links)
 {
-    for (int peer = 1; peer < nodes; peer++)
+    int counter = 5000;
+
+    int fd_parent = getPort(mesh, qid, PARENT_ID, WRITE_LINK, links);
+
+    int fd_target = getPort(mesh, qid, peer, READ_LINK, links);
+
+    Data data;
+
+    while (read(fd_target, &data, sizeof(data)) > 0)
     {
-        if (peer == qid) continue;
-
-        Channel parent = {.mode = WRITE_LINK, .target = 0};
-
-        Channel target = {.mode = READ_LINK, .target = peer};
-
-        int fd_parent = getPort(mesh, qid, parent, nodes);
-
-        int fd_target = getPort(mesh, qid, target, nodes);
-
-        Data data;
-
-        while (read(fd_target, &data, sizeof(data)) != 0) {
-            counter = max(counter + 1, data.n);
-            Log log = {.id = qid, .n = counter, .type = RECEIVE, .source = data.id };
-            write(fd_parent, &log, sizeof(log));
-        }
-
+        // counter = max(counter + 1, data.n);
+        Log log = {.actor = qid, .state = data.n, .type = RECEIVE, .patner = data.id};
+        write(fd_parent, &log, sizeof(log));
     }
 }

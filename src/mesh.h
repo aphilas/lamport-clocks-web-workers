@@ -1,29 +1,23 @@
 #include <stdbool.h>
+#include <stdio.h>
 #include <unistd.h>
-
-
-typedef struct link {
-    int source;
-    int target;
-    int fd;
-} Link;
 
 typedef enum mode {
     READ_LINK,
     WRITE_LINK
 } Mode;
 
-typedef struct channel {
-    int target;
+typedef struct link {
+    int actor;
+    int patner;
+    int fd;
     Mode mode;
-} Channel;
+} Link;
 
-
-
-void CreateMesh(Link* mesh, int nodes);
-void CloseRemoteLinks(Link * mesh, int qid, int nodes);
-int getPort(Link* mesh, int qid, Channel channel, int nodes);
-void CloseLinksMode(Link* mesh, Mode mode, int qid, int nodes);
-void CloseParentLinks(Link * mesh, int qid, int nodes);
+int CreateMesh(Link* mesh, int nodes);
+void CloseRemoteLinks(Link * mesh, int actor, int links);
+int getPort(Link *mesh, int actor, int patner, Mode mode, int links);
+void CloseLinksMode(Link* mesh, Mode mode, int actor, int links);
+void CloseParentLinks(Link * mesh, int actor, int links);
 
 

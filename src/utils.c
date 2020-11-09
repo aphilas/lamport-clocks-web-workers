@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
+
 int fact(int n)
 {
   int res = 1;
@@ -22,6 +23,7 @@ int n_choose_k(int n, int k)
 
 bool toss(int k)
 {
+
   double random = (double)rand() / (double)RAND_MAX;
 
   double mark = (double)1 / (double)k;
@@ -36,10 +38,27 @@ int square(int n)
 
 int get_target(int nodes, int qid)
 {
-  int n = rand() % (nodes - 1);
+  if (nodes <= 2)
+  {
+    return 0;
+  }
+
+  if (nodes == 3)
+  {
+    if (qid == 1)
+    {
+      return 2;
+    }
+    else
+    {
+      return 1;
+    }
+  }
+
+  int n = rand() % (nodes - 2);
   if (n < qid - 1)
   {
-    return ++n;
+    return n+1;
   }
   else
   {

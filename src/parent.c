@@ -1,64 +1,92 @@
 #include "parent_child.h"
 
-void Monitor(Link *mesh, int qid, int nodes);
-
-void ParentProcess(int qid, Link *mesh, int nodes)
+typedef struct
 {
-    CloseRemoteLinks(mesh, qid, nodes);
+    Link *mesh;
+    int qid;
+    int child;
+    int links;
+} MonitorArgs;
 
-    CloseLinksMode(mesh, WRITE_LINK, qid, nodes);
+void MonitorChild(Link *mesh, int qid, int child, int links);
+void MonitorAll(Link *mesh, int qid, int nodes, int links);
+void *MonitorChild_P(void *args);
 
-    Monitor(mesh, qid, nodes);
+void ParentProcess(int qid, Link *mesh, int nodes, int links)
+{
+    CloseRemoteLinks(mesh, qid, links);
 
-    // log out their messages
-    CloseLinksMode(mesh, READ_LINK, qid, nodes);
+    CloseLinksMode(mesh, WRITE_LINK, qid, links);
+
+    MonitorAll(mesh, qid, nodes, links);
+
+    CloseLinksMode(mesh, READ_LINK, qid, links);
 }
 
-void Monitor(Link *mesh, int qid, int nodes)
+void MonitorAll(Link *mesh, int qid, int nodes, int links)
 {
+    pthread_t threads[nodes - 1];
+    MonitorArgs* m_args;
+
     for (int child = 1; child < nodes; child++)
     {
-        printf("hello from parent\n");
-        Channel target = {.mode = READ_LINK, .target = child};
+        m_args = malloc(sizeof(MonitorArgs));
+        m_args->child = child;
+        m_args->qid = qid;
+        m_args->links = links;
+        m_args->mesh = mesh;
 
-        int fd_target = getPort(mesh, qid, target, nodes);
+        pthread_create(&threads[child-1], NULL, MonitorChild_P, (void *)m_args);
+    }
 
-        Log log;
+    for (int child = 1; child < nodes; child++) {
+        pthread_join(threads[child-1], NULL);
+    }
 
-        int msg = 5;
-        while (msg > 0)
+}
+
+void *MonitorChild_P(void *args)
+{
+    MonitorArgs *m_args = (MonitorArgs *)args;
+
+    Link *mesh = m_args->mesh;
+    int qid = m_args->qid;
+    int child = m_args->child;
+    int links = m_args->links;
+
+    MonitorChild(mesh, qid, child, links);
+
+    free(args);
+
+    pthread_exit(NULL);
+}
+
+void MonitorChild(Link *mesh, int qid, int child, int links)
+{
+    int fd_target = getPort(mesh, qid, child, READ_LINK, links);
+
+    Log log;
+
+    
+    while (read(fd_target, &log, sizeof(log)) > 0)
+    {
+        switch (log.type)
         {
-            int res = read(fd_target, &log, sizeof(log));
+        case LOCAL:
+            printf("State: Child #%d has value: %d\n", log.actor, log.state);
+            break;
 
-            if (res == 0)
-            {
-                printf("buffer closed\n");
-                break;
-            }
-            else if (res == -1)
-            {
-                printf("error reading from buffer: %d\n", fd_target);
-            }
-            else
-            {
+        case RECEIVE:
+            printf("Transfer: Child #%d has RECEIVED (N=%d) from Child #%d\n", log.actor, log.state, log.patner);
+            break;
 
-                switch (log.type)
-                {
-                case LOCAL:
-                    printf("State: Child #%d has value: %d\n", log.id, log.n);
-                    break;
+        case SEND:
+            printf("Transfer: Child #%d has SENT (N=%d) to Child #%d\n", log.actor, log.state, log.patner);
+            break;
 
-                case RECEIVE:
-                    printf("Transfer: Child #%d has received value: %d from Child #%d\n", log.id, log.n, log.source);
-
-                case SEND:
-                    printf("Transfer: Child #%d has sent value: %d to Child #%d\n", log.id, log.n, log.source);
-
-                default:
-                    printf("Invalid log format! %d\n", log.id);
-                }
-            }
-            msg--;
+        default:
+            break;
         }
     }
+    
 }

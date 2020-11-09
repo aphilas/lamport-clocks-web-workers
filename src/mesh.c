@@ -1,89 +1,85 @@
 #include "mesh.h"
 #include "utils.h"
 
-void CreateMesh(Link *mesh, int nodes)
+int CreateMesh(Link *mesh, int nodes)
 {
     int count = 0;
     for (int i = 0; i < nodes; i++)
     {
-        for (int j = 0; j < nodes; j++) {
-            if (i == j) continue;
+        for (int j = 0; j < nodes; j++)
+        {
+            if (i == j)
+                continue;
 
             int fds[2];
             pipe(fds);
 
-            Link link = { .fd= fds[0], .source= i, .target= j };
-            Link link2 = { .fd= fds[1], .source= j, .target= i };
+            Link link = {.fd = fds[0], .actor = i, .patner = j, .mode = READ_LINK};
+            Link link2 = {.fd = fds[1], .actor = j, .patner = i, .mode = WRITE_LINK};
 
             mesh[count] = link;
-            mesh[++count] = link2;
+            mesh[count + 1] = link2;
+
+            count += 2;
         }
     }
+
+    return count;
 }
 
-void CloseRemoteLinks(Link *mesh, int qid, int nodes)
+void CloseRemoteLinks(Link *mesh, int actor, int links)
 {
-    int links = square(nodes) - nodes;
-
     for (int i = 0; i < links; i++)
     {
         Link link = mesh[i];
 
-        if (link.source != qid && link.target != qid) {
-            close(link.fd);
-        }
-    }
-
-
-}
-
-int getPort(Link *mesh, int qid, Channel channel, int nodes)
-{
-    int links = square(nodes) - nodes;
-
-    for (int i = 0; i < links; i++)
-    {
-        Link link = mesh[i];
-
-        if (channel.mode == READ_LINK && link.target == qid && link.source == channel.target) {
-            return link.fd;
-        }
-
-        if (channel.mode == WRITE_LINK && link.source == qid && link.target == channel.target) {
-            return link.fd;
-        }
-    }
-}
-
-void CloseLinksMode(Link *mesh, Mode mode, int qid, int nodes)
-{
-    int links = square(nodes) - nodes;
-
-    for (int i = 0; i < links; i++)
-    {
-        Link link = mesh[i];
-
-        if ((link.source == 0 || link.target == 0) && qid != 0) continue;
-
-        if (mode == READ_LINK && link.source == qid) {
-            close(link.fd);
-        }
-
-        if (mode == WRITE_LINK && link.target == qid) {
+        if (link.actor != actor)
+        {
             close(link.fd);
         }
     }
 }
 
-void CloseParentLinks(Link *mesh, int qid, int nodes)
+int getPort(Link *mesh, int actor, int patner, Mode mode, int links)
 {
-    int links = square(nodes) - nodes;
-
     for (int i = 0; i < links; i++)
     {
         Link link = mesh[i];
 
-        if ((link.target == qid && link.source == 0) || (link.source == qid && link.target == 0)) {
+        if (link.actor == actor && link.patner == patner)
+        {
+            if (link.mode == mode)
+            {
+                return link.fd;
+            }
+        }
+    }
+}
+
+void CloseLinksMode(Link *mesh, Mode mode, int actor, int links)
+{
+    for (int i = 0; i < links; i++)
+    {
+        Link link = mesh[i];
+
+        if (link.patner == 0 && actor != 0)
+            continue;
+
+        if (link.mode == mode && link.actor == actor)
+        {
+            close(link.fd);
+        }
+    }
+}
+
+void CloseParentLinks(Link *mesh, int actor, int links)
+{
+    for (int i = 0; i < links; i++)
+    {
+        Link link = mesh[i];
+
+        if (link.actor == actor && link.patner == 0)
+        {
             close(link.fd);
         }
     }

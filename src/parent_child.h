@@ -1,8 +1,9 @@
-#include <stdio.h>
-
 #include "mesh.h"
 #include "utils.h"
-
+#include <sys/types.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <pthread.h>
 
 typedef struct data
 {
@@ -19,11 +20,11 @@ typedef enum event_type
 
 typedef struct log
 {
-    int id;
-    int n;
+    int actor;
+    int patner;
+    int state;
     EventType type;
-    int source;
 } Log;
 
-void ChildProcess(int qid, Link *mesh, int nodes);
-void ParentProcess(int qid, Link *mesh, int nodes);
+void ChildProcess(int qid, Link *mesh, int nodes, int links);
+void ParentProcess(int qid, Link *mesh, int nodes, int links);
