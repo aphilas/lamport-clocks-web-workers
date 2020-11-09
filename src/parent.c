@@ -67,13 +67,16 @@ void MonitorChild(Link *mesh, int qid, int child, int links)
 
     Log log;
 
-    
     while (read(fd_target, &log, sizeof(log)) > 0)
     {
         switch (log.type)
         {
         case LOCAL:
             printf("State: Child #%d has value: %d\n", log.actor, log.state);
+            break;
+
+        case UPDATE:
+            printf("Update: Child #%d has updated value to : %d\n", log.actor, log.state);
             break;
 
         case RECEIVE:

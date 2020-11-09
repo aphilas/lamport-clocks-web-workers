@@ -1,7 +1,6 @@
 #include "parent_child.h"
-#include <time.h>
 
-#define N0DES 5
+#define N0DES 4
 
 int main(void)
 {
@@ -43,7 +42,7 @@ int main(void)
     printf("\n");
     printf("\n");
 
-    printf("All children comleted\n");
+    printf("All children completed\n");
 
   }
 

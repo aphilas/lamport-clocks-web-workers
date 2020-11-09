@@ -1,9 +1,11 @@
-#include "mesh.h"
-#include "utils.h"
 #include <sys/types.h>
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <time.h>
+
+#include "mesh.h"
+#include "utils.h"
 
 typedef struct data
 {
@@ -15,7 +17,8 @@ typedef enum event_type
 {
     LOCAL,
     SEND,
-    RECEIVE
+    RECEIVE,
+    UPDATE
 } EventType;
 
 typedef struct log
