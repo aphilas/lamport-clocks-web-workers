@@ -35,7 +35,7 @@ void ChildProcess(int qid, Link *mesh, int nodes, int links)
 {
     CloseRemoteLinks(mesh, qid, links);
 
-    counter = 1;
+    counter = 0;
 
     pthread_mutex_init(&mutexcounter, NULL);
 
