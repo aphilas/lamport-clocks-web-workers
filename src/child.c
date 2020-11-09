@@ -24,8 +24,8 @@ typedef struct
     int links;
 } ListenArgs;
 
-void Broadcast(int qid, Link *mesh, int nodes, int links);
-void Listen(int qid, Link *mesh, int nodes, int links);
+void BroadcastAndListen(int qid, Link *mesh, int nodes, int links);
+pthread_t *Listen(int qid, Link *mesh, int nodes, int links);
 void *ListenPeer_P(void *args);
 void ListenPeer(Link *mesh, int qid, int peer, int links);
 void *SendData_P(void *args);
@@ -35,27 +35,22 @@ void ChildProcess(int qid, Link *mesh, int nodes, int links)
 {
     CloseRemoteLinks(mesh, qid, links);
 
-    counter = 0;
-
-    pthread_mutex_init(&mutexcounter, NULL);
-
-    Broadcast(qid, mesh, nodes, links);
-
-    CloseLinksMode(mesh, WRITE_LINK, qid, links);
-
-    Listen(qid, mesh, nodes, links);
-
-    pthread_mutex_destroy(&mutexcounter);
-
-    CloseLinksMode(mesh, READ_LINK, qid, links);
+    BroadcastAndListen(qid, mesh, nodes, links);
 
     CloseParentLinks(mesh, qid, links);
 }
 
-void Broadcast(int qid, Link *mesh, int nodes, int links)
+void BroadcastAndListen(int qid, Link *mesh, int nodes, int links)
 {
     pthread_t b_threads[TRANSFERS];
     TransferArgs *t_args;
+
+    pthread_t l_threads[nodes - 1];
+    ListenArgs *l_args;
+
+    counter = 0;
+
+    pthread_mutex_init(&mutexcounter, NULL);
 
     for (int transfer = 0; transfer < TRANSFERS; transfer++)
     {
@@ -68,18 +63,6 @@ void Broadcast(int qid, Link *mesh, int nodes, int links)
         pthread_create(&b_threads[transfer], NULL, SendData_P, (void *)t_args);
     }
 
-    for (int transfer = 0; transfer < TRANSFERS; transfer++)
-    {
-        pthread_join(b_threads[transfer], NULL);
-    }
-}
-
-void Listen(int qid, Link *mesh, int nodes, int links)
-{
-
-    pthread_t l_threads[nodes - 1];
-    ListenArgs *l_args;
-
     for (int peer = 1; peer < nodes; peer++)
     {
         l_args = malloc(sizeof(ListenArgs));
@@ -91,10 +74,21 @@ void Listen(int qid, Link *mesh, int nodes, int links)
         pthread_create(&l_threads[peer - 1], NULL, ListenPeer_P, (void *)l_args);
     }
 
+    for (int transfer = 0; transfer < TRANSFERS; transfer++)
+    {
+        pthread_join(b_threads[transfer], NULL);
+    }
+
+    CloseLinksMode(mesh, WRITE_LINK, qid, links);
+
     for (int peer = 1; peer < nodes; peer++)
     {
         pthread_join(l_threads[peer - 1], NULL);
     }
+
+    CloseLinksMode(mesh, READ_LINK, qid, links);
+
+    pthread_mutex_destroy(&mutexcounter);
 }
 
 void *SendData_P(void *args)
